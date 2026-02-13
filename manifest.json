@@ -1,0 +1,26 @@
+{
+    "name": "Calculadora Divisas Premium",
+    "short_name": "Divisas Pro",
+    "start_url": "./index.html",
+    "id": "./",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "description": "Calculadora y convertidor de divisas (USD/VES) en tiempo real.",
+    "icons": [
+        {
+            "src": "icon.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icon.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

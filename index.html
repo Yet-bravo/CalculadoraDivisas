@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Divisas Premium</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- PWA Configuration -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registrado', reg))
+                    .catch(err => console.log('SW error', err));
+            });
+        }
+
+        // DIAGNÓSTICO AUTOMÁTICO (Para detectar errores de subida)
+        window.addEventListener('load', async () => {
+            const filesToCheck = ['./manifest.json', './sw.js', './icon.png'];
+            const errors = [];
+
+            for (const file of filesToCheck) {
+                try {
+                    const response = await fetch(file);
+                    if (!response.ok) errors.push(file);
+                } catch (e) {
+                    errors.push(file);
+                }
+            }
+
+            if (errors.length > 0) {
+                alert(`⚠️ ATENCIÓN: Faltan archivos en GitHub:\n${errors.join('\n')}\n\nPor favor súbelos para que funcione la instalación.`);
+            }
+        });
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #38bdf8;
+            /* Sky Blue */
+            --accent-glow: rgba(56, 189, 248, 0.5);
+            --operator-color: #a855f7;
+            /* Purple */
+            --equal-bg: linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%);
+            --font-main: 'Outfit', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-main);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Background Blobs for Atmosphere */
+        .background-blobs {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.6;
+            animation: float 10s infinite alternate;
+        }
+
+        .blob-1 {
+            width: 300px;
+            height: 300px;
+            background: #4f46e5;
+            top: -50px;
+            left: -50px;
+        }
+
+        .blob-2 {
+            width: 400px;
+            height: 400px;
+            background: #db2777;
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -5s;
+        }
+
+        .blob-3 {
+            width: 200px;
+            height: 200px;
+            background: #0ea5e9;
+            bottom: 20%;
+            left: 20%;
+            animation-delay: -2s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(30px, 30px);
+            }
+        }
+
+        /* Main Container - Glassmorphism */
+        .calculator-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 24px;
+            width: 95%;
+            /* More width on small screens */
+            max-width: 380px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 400px) {
+            .calculator-container {
+                padding: 16px;
+                border-radius: 20px;
+            }
+
+            .current-operand {
+                font-size: 2rem;
+            }
+
+            .keypad button {
+                height: 55px;
+                font-size: 1.1rem;
+            }
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.3s;
+        }
+
+        .icon-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .currency-toggle {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 6px 12px;
+            color: var(--accent-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .currency-toggle:hover {
+            background: rgba(56, 189, 248, 0.1);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        /* Display Section */
+        .display {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            min-height: 120px;
+            padding: 10px;
+        }
+
+        .previous-operand {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            min-height: 1.5rem;
+        }
+
+        .current-operand {
+            color: var(--text-primary);
+            font-size: 2.5rem;
+            font-weight: 600;
+            word-break: break-all;
+            line-height: 1.2;
+        }
+
+        .conversion-display {
+            margin-top: 8px;
+            color: var(--accent-color);
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+        }
+
+        /* Keypad Grid */
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        button {
+            font-family: var(--font-main);
+            user-select: none;
+            outline: none;
+        }
+
+        /* Base Button Style */
+        .keypad button {
+            height: 60px;
+            border-radius: 16px;
+            border: none;
+            font-size: 1.25rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .keypad button:active {
+            transform: scale(0.95);
+        }
+
+        /* Number Buttons */
+        .btn-number {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+        }
+
+        .btn-number:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-number.zero {
+            grid-column: span 2;
+        }
+
+        /* Operator Buttons */
+        .btn-operator {
+            color: var(--operator-color);
+            background: rgba(168, 85, 247, 0.1);
+            font-weight: 600;
+        }
+
+        .btn-operator:hover {
+            background: rgba(168, 85, 247, 0.2);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+        }
+
+        /* Control Buttons (AC, Delete) */
+        .btn-control {
+            color: #ef4444;
+            /* Red for danger/clear */
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .btn-control:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        /* Equal Button */
+        .btn-equal {
+            grid-column: span 1;
+            background: var(--equal-bg);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn-equal:hover {
+            filter: brightness(1.1);
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            /* Hidden by default */
+            position: fixed;
+            z-index: 10;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.show {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            width: 90%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+
+        .modal.show .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-content h3 {
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            border: 2px solid #334155;
+            background: #0f172a;
+            color: white;
+            font-size: 1.2rem;
+            text-align: center;
+            margin-bottom: 20px;
+            outline: none;
+        }
+
+        .modal-content input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .modal-actions button {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .btn-text {
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .btn-text:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: #0f172a;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Copy Button Styles */
+        .display-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            position: relative;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px;
+            opacity: 0.5;
+            transition: all 0.2s ease;
+            display: flex;
+            /* Ensure icon is centered */
+        }
+
+        .copy-btn:hover {
+            opacity: 1;
+            color: var(--accent-color);
+            transform: scale(1.1);
+        }
+
+        .copy-btn.copied {
+            color: #4ade80;
+            /* Green for success */
+            opacity: 1;
+        }
+
+        /* Adjust display for rows */
+        .current-operand {
+            /* ... existing styles ... */
+            width: fit-content;
+            /* Allow button to sit next to it */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="calculator-container">
+        <!-- Header: Rate & Mode -->
+        <div class="header">
+            <button id="btn-rate" class="icon-btn" title="Configurar Tasa">
+                <i class="fa-solid fa-gear"></i> <span id="current-rate-display">Tasa: --</span>
+            </button>
+            <button id="btn-toggle-currency" class="currency-toggle">
+                <span id="label-from">USD</span> <i class="fa-solid fa-arrow-right-arrow-left"></i> <span
+                    id="label-to">VES</span>
+            </button>
+            <button id="btn-install" class="currency-toggle"
+                style="margin-left: 8px; color: #4ade80; border-color: rgba(74, 222, 128, 0.3);">
+                <i class="fa-solid fa-download"></i> Instalar
+            </button>
+        </div>
+
+        <!-- Display -->
+        <div class="display">
+            <div class="previous-operand" id="previous-operand"></div>
+
+            <div class="display-row">
+                <div class="current-operand" id="current-operand">0</div>
+                <button class="copy-btn" id="copy-main" title="Copiar monto">
+                    <i class="fa-regular fa-copy"></i>
+                </button>
+            </div>
+
+            <div class="display-row">
+                <div class="conversion-display" id="conversion-display">≈ 0,00 Bs</div>
+                <button class="copy-btn" id="copy-conversion" title="Copiar conversión">
+                    <i class="fa-regular fa-copy"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Keypad -->
+        <div class="keypad">
+            <button class="btn-control" data-action="clear">AC</button>
+            <button class="btn-control" data-action="delete"><i class="fa-solid fa-delete-left"></i></button>
+            <button class="btn-operator" data-action="percent">%</button>
+            <button class="btn-operator" data-operation="÷">÷</button>
+
+            <button class="btn-number" data-number="7">7</button>
+            <button class="btn-number" data-number="8">8</button>
+            <button class="btn-number" data-number="9">9</button>
+            <button class="btn-operator" data-operation="×">×</button>
+
+            <button class="btn-number" data-number="4">4</button>
+            <button class="btn-number" data-number="5">5</button>
+            <button class="btn-number" data-number="6">6</button>
+            <button class="btn-operator" data-operation="-">−</button>
+
+            <button class="btn-number" data-number="1">1</button>
+            <button class="btn-number" data-number="2">2</button>
+            <button class="btn-number" data-number="3">3</button>
+            <button class="btn-operator" data-operation="+">+</button>
+
+            <button class="btn-number zero" data-number="0">0</button>
+            <button class="btn-number" data-number=".">.</button>
+            <button class="btn-equal" data-action="calculate">=</button>
+        </div>
+    </div>
+
+    <!-- Modal for Rate Setting -->
+    <div id="rate-modal" class="modal">
+        <div class="modal-content">
+            <h3>Configurar Tasa de Cambio</h3>
+            <p>Ingrese el valor de 1 USD en Bolívares (VES)</p>
+            <input type="number" id="rate-input" step="0.01" placeholder="Ej: 38.50">
+            <div class="modal-actions">
+                <button id="btn-cancel-rate" class="btn-text">Cancelar</button>
+                <button id="btn-save-rate" class="btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /*
+            Calculadora Premium con Conversión de Divisas
+            Autor: Antigravity
+        */
+
+        // --- Elementos del DOM ---
+        const previousOperandTextElement = document.getElementById('previous-operand');
+        const currentOperandTextElement = document.getElementById('current-operand');
+        const conversionDisplay = document.getElementById('conversion-display');
+
+        const keys = document.querySelectorAll('[data-number], [data-operation], [data-action]');
+        const btnToggleCurrency = document.getElementById('btn-toggle-currency');
+        const labelFrom = document.getElementById('label-from');
+        const labelTo = document.getElementById('label-to');
+
+        // Copy Buttons
+        const copyMainBtn = document.getElementById('copy-main');
+        const copyConversionBtn = document.getElementById('copy-conversion');
+
+        // Modal de Tasa
+        const btnRate = document.getElementById('btn-rate');
+        const currentRateDisplay = document.getElementById('current-rate-display');
+        const rateModal = document.getElementById('rate-modal');
+        const btnCancelRate = document.getElementById('btn-cancel-rate');
+        const btnSaveRate = document.getElementById('btn-save-rate');
+        const rateInput = document.getElementById('rate-input');
+
+        // --- Estado de la App ---
+        class Calculator {
+            constructor(previousOperandTextElement, currentOperandTextElement) {
+                this.previousOperandTextElement = previousOperandTextElement;
+                this.currentOperandTextElement = currentOperandTextElement;
+                this.clear();
+                this.exchangeRate = parseFloat(localStorage.getItem('exchangeRate')) || 40.00; // Valor por defecto o guardado
+                this.isUsdToVes = true; // true = USD -> VES, false = VES -> USD
+            }
+
+            clear() {
+                this.currentOperand = '0';
+                this.previousOperand = '';
+                this.operation = undefined;
+            }
+
+            delete() {
+                if (this.currentOperand === '0') return;
+
+                if (this.currentOperand.length === 1) {
+                    this.currentOperand = '0';
+                } else {
+                    this.currentOperand = this.currentOperand.toString().slice(0, -1);
+                }
+            }
+
+            appendNumber(number) {
+                if (number === '.' && this.currentOperand.includes('.')) return;
+                if (this.currentOperand === '0' && number !== '.') {
+                    this.currentOperand = number.toString();
+                } else {
+                    this.currentOperand = this.currentOperand.toString() + number.toString();
+                }
+            }
+
+            chooseOperation(operation) {
+                if (this.currentOperand === '') return;
+                if (this.previousOperand !== '') {
+                    this.calculate();
+                }
+                this.operation = operation;
+                this.previousOperand = this.currentOperand;
+                this.currentOperand = '0'; // Se muestra 0 temporalmente hasta escribir el nuevo numero
+            }
+
+            calculate() {
+                let computation;
+                const prev = parseFloat(this.previousOperand);
+                const current = parseFloat(this.currentOperand);
+                if (isNaN(prev) || isNaN(current)) return;
+
+                switch (this.operation) {
+                    case '+':
+                        computation = prev + current;
+                        break;
+                    case '-':
+                        computation = prev - current;
+                        break;
+                    case '×':
+                        computation = prev * current;
+                        break;
+                    case '÷':
+                        if (current === 0) {
+                            alert('No se puede dividir por cero');
+                            return;
+                        }
+                        computation = prev / current;
+                        break;
+                    default:
+                        return;
+                }
+
+                this.currentOperand = computation;
+                this.operation = undefined;
+                this.previousOperand = '';
+            }
+
+            percent() {
+                const current = parseFloat(this.currentOperand);
+                if (isNaN(current)) return;
+                this.currentOperand = current / 100;
+            }
+
+            getDisplayNumber(number) {
+                const stringNumber = number.toString();
+                const integerDigits = parseFloat(stringNumber.split('.')[0]);
+                const decimalDigits = stringNumber.split('.')[1];
+
+                let integerDisplay;
+                if (isNaN(integerDigits)) {
+                    integerDisplay = '';
+                } else {
+                    integerDisplay = integerDigits.toLocaleString('en', { maximumFractionDigits: 0 });
+                }
+
+                if (decimalDigits != null) {
+                    return `${integerDisplay}.${decimalDigits}`;
+                } else {
+                    return integerDisplay;
+                }
+            }
+
+            updateDisplay() {
+                this.currentOperandTextElement.innerText = this.getDisplayNumber(this.currentOperand);
+                if (this.operation != null) {
+                    this.previousOperandTextElement.innerText =
+                        `${this.getDisplayNumber(this.previousOperand)} ${this.operation}`;
+                } else {
+                    this.previousOperandTextElement.innerText = '';
+                }
+
+                // Actualizar conversión
+                this.updateConversion();
+                // Actualizar etiqueta de tasa en header
+                currentRateDisplay.innerText = `Tasa: ${this.exchangeRate.toFixed(2)}`;
+            }
+
+            updateConversion() {
+                const value = parseFloat(this.currentOperand);
+                if (isNaN(value)) {
+                    conversionDisplay.innerText = '≈ 0.00';
+                    return;
+                }
+
+                let result;
+                let symbol;
+
+                if (this.isUsdToVes) {
+                    // USD -> VES
+                    result = value * this.exchangeRate;
+                    symbol = 'Bs';
+                } else {
+                    // VES -> USD
+                    result = value / this.exchangeRate;
+                    symbol = '$';
+                }
+
+                // Formato de moneda
+                conversionDisplay.innerText = `≈ ${result.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+                // Guardar valor puro para copiado si es necesario
+                conversionDisplay.dataset.value = result.toFixed(2);
+            }
+
+            // Funciones específicas de la app
+            toggleCurrency() {
+                this.isUsdToVes = !this.isUsdToVes;
+
+                // Animación simple de texto
+                if (this.isUsdToVes) {
+                    labelFrom.innerText = 'USD';
+                    labelTo.innerText = 'VES';
+                } else {
+                    labelFrom.innerText = 'VES';
+                    labelTo.innerText = 'USD';
+                }
+
+                this.updateDisplay();
+            }
+
+            setRate(newRate) {
+                if (!isNaN(newRate) && newRate > 0) {
+                    this.exchangeRate = newRate;
+                    localStorage.setItem('exchangeRate', newRate);
+                    this.updateDisplay();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // --- Inicialización ---
+        const calculator = new Calculator(previousOperandTextElement, currentOperandTextElement);
+        calculator.updateDisplay();
+
+        // --- API Fetch Function ---
+        async function fetchExchangeRate() {
+            const apiURL = 'https://ve.dolarapi.com/v1/dolares/oficial';
+
+            try {
+                currentRateDisplay.innerHTML = '<i class="fa-solid fa-sync fa-spin"></i> Cargando...';
+
+                const response = await fetch(apiURL);
+                if (!response.ok) throw new Error('Error en la red');
+
+                const data = await response.json();
+
+                if (data && data.promedio) {
+                    const newRate = parseFloat(data.promedio);
+                    calculator.setRate(newRate);
+
+                    // Format date
+                    const date = new Date(data.fechaActualizacion);
+                    const dateStr = date.toLocaleDateString('es-VE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+                    console.log(`Tasa actualizada: ${newRate} (Fecha: ${dateStr})`);
+
+                    // Mostrar notificación visual discreta (opcional) o actualizar el título del botón
+                    currentRateDisplay.innerHTML = `Tasa: ${newRate.toFixed(2)}`;
+                    calculator.updateDisplay();
+                }
+            } catch (error) {
+                console.error('No se pudo obtener la tasa:', error);
+                currentRateDisplay.innerHTML = `Tasa: ${calculator.exchangeRate.toFixed(2)} (Offline)`;
+            }
+        }
+
+        // Llamar a la API al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchExchangeRate();
+        });
+
+        // --- Event Listeners ---
+
+        // Copy Functionality
+        async function copyToClipboard(text, btnElement) {
+            try {
+                await navigator.clipboard.writeText(text);
+
+                // Visual Feedback
+                const originalIcon = btnElement.innerHTML;
+                btnElement.innerHTML = '<i class="fa-solid fa-check"></i>';
+                btnElement.classList.add('copied');
+
+                setTimeout(() => {
+                    btnElement.innerHTML = originalIcon;
+                    btnElement.classList.remove('copied');
+                }, 2000);
+
+            } catch (err) {
+                console.error('Error al copiar:', err);
+                alert('No se pudo copiar al portapapeles');
+            }
+        }
+
+        copyMainBtn.addEventListener('click', () => {
+            // Get raw number from logic or parse from display (removing unnecessary chars)
+            const textToCopy = calculator.currentOperandTextElement.innerText;
+            copyToClipboard(textToCopy, copyMainBtn);
+        });
+
+        copyConversionBtn.addEventListener('click', () => {
+            // Get value from updateConversion logic or just clean the text
+            const textToCopy = conversionDisplay.innerText.replace('≈ ', '');
+            copyToClipboard(textToCopy, copyConversionBtn);
+        });
+
+        // Botones del teclado
+        keys.forEach(button => {
+            button.addEventListener('click', () => {
+                const { number, operation, action } = button.dataset;
+
+                if (number) {
+                    if (calculator.justCalculated) {
+                        calculator.currentOperand = '0';
+                        calculator.justCalculated = false;
+                    }
+                    calculator.appendNumber(number);
+                    calculator.updateDisplay();
+                }
+
+                if (operation) {
+                    calculator.chooseOperation(operation);
+                    calculator.updateDisplay();
+                    calculator.justCalculated = false;
+                }
+
+                if (action === 'clear') {
+                    calculator.clear();
+                    calculator.updateDisplay();
+                }
+
+                if (action === 'delete') {
+                    calculator.delete();
+                    calculator.updateDisplay();
+                }
+
+                if (action === 'calculate') {
+                    calculator.calculate();
+                    calculator.justCalculated = true; // Flag para indicar que acabamos de obtener un resultado
+                    calculator.updateDisplay();
+                }
+
+                if (action === 'percent') {
+                    calculator.percent();
+                    calculator.updateDisplay();
+                }
+            });
+        });
+
+        // Toggle Divisa
+        btnToggleCurrency.addEventListener('click', () => {
+            calculator.toggleCurrency();
+        });
+
+        // Modal Tasa (Permite sobrescribir la tasa de la API si el usuario quiere)
+        btnRate.addEventListener('click', () => {
+            rateInput.value = calculator.exchangeRate;
+            rateModal.classList.add('show');
+        });
+
+        btnCancelRate.addEventListener('click', () => {
+            rateModal.classList.remove('show');
+        });
+
+        btnSaveRate.addEventListener('click', () => {
+            const newRate = parseFloat(rateInput.value);
+            if (calculator.setRate(newRate)) {
+                rateModal.classList.remove('show');
+                // Indicar que es manual
+                currentRateDisplay.innerHTML = `Tasa: ${newRate.toFixed(2)} (Manual)`;
+            } else {
+                alert("Por favor ingrese una tasa válida mayor a 0.");
+            }
+        });
+
+        // Cerrar modal al hacer click fuera
+        window.addEventListener('click', (e) => {
+            if (e.target === rateModal) {
+                rateModal.classList.remove('show');
+            }
+        });
+
+        // PWA Install Logic
+        let deferredPrompt;
+        const btnInstall = document.getElementById('btn-install');
+
+        // Ocultar botón si ya está instalada
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            btnInstall.style.display = 'none';
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            btnInstall.style.display = 'flex'; // Mostrar botón si es instalable
+        });
+
+        btnInstall.addEventListener('click', () => {
+            if (deferredPrompt) {
+                // Si el navegador permite instalación automática
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                        btnInstall.style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+                // FALLBACK: Instrucciones manuales
+                const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+                if (isIos) {
+                    alert("Para instalar en iPhone:\n1. Toca el botón Compartir (abajo al centro)\n2. Busca y toca 'Agregar al inicio'");
+                } else {
+                    alert("Para instalar:\n1. Toca los 3 puntos del navegador (arriba)\n2. Selecciona 'Instalar aplicación' o 'Agregar a pantalla principal'");
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
